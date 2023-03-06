@@ -9,13 +9,13 @@ use proc_macro2::Ident;
 use quote::quote;
 use syn::{parse, Item, ImplItem, TraitItem};
 
-#[cfg(features = "const")]
+#[cfg(feature = "const")]
 #[proc_macro_attribute]
 pub fn unconst(_attr: TokenStream, item: TokenStream) -> TokenStream {
     item
 }
 
-#[cfg(not(features = "const"))]
+#[cfg(not(feature = "const"))]
 #[proc_macro_attribute]
 pub fn unconst(_attr: TokenStream, item: TokenStream) -> TokenStream {
     match parse::<Item>(item).unwrap() {
