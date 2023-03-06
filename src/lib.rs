@@ -1,4 +1,4 @@
-#![no_std]
+// #![no_std]
 
 extern crate alloc;
 
@@ -12,9 +12,9 @@ use proc_macro2::Ident;
 use quote::quote;
 use syn::{
     parse, Item, ImplItem, TraitItem, Attribute, Generics, GenericParam,
-    TypeParamBound, TraitBound, Signature, WherePredicate,
-    punctuated::{Punctuated, Pair},
-    token::Add
+    TypeParamBound, TraitBound, Signature, WherePredicate, Meta,
+    punctuated::Punctuated,
+    token::Plus
 };
 
 #[cfg(feature = "const")]
@@ -39,7 +39,7 @@ pub fn unconst(_attr: TokenStream, item: TokenStream) -> TokenStream {
         Item::Impl(mut r#impl) => {
             for item in r#impl.items.iter_mut() {
                 match item {
-                    ImplItem::Method(method) => unconst_sig(&mut r#method.sig),
+                    ImplItem::Fn(r#fn) => unconst_sig(&mut r#fn.sig),
                     _ => continue
                 };
             }
@@ -54,7 +54,7 @@ pub fn unconst(_attr: TokenStream, item: TokenStream) -> TokenStream {
         Item::Trait(mut r#trait) => {
             for item in r#trait.items.iter_mut() {
                 match item {
-                    TraitItem::Method(method) => unconst_sig(&mut r#method.sig),
+                    TraitItem::Fn(r#fn) => unconst_sig(&mut r#fn.sig),
                     _ => continue
                 };
             }
@@ -74,10 +74,16 @@ pub fn unconst(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
 fn unconst_attrs(attrs: &mut Vec<Attribute>) {
     for attr in attrs.iter_mut() {
-        let mut segment = attr.path.segments.first_mut().unwrap();
-        if segment.ident.to_string() == "derive_const" {
-            segment.ident = Ident::new("derive", segment.ident.span());
+        match &mut attr.meta {
+            Meta::Path(path) => {
+                let mut segment = path.segments.first_mut().unwrap();
+                if segment.ident.to_string() == "derive_const" {
+                    segment.ident = Ident::new("derive", segment.ident.span());
+                }
+            }
+            _ => continue
         }
+        
     }
 }
 
@@ -103,10 +109,13 @@ fn unconst_generics(generics: &mut Generics) {
     }
 }
 
-fn unconst_bounds(bounds: &mut Punctuated<TypeParamBound, Add>) {
+fn unconst_bounds(bounds: &mut Punctuated<TypeParamBound, Plus>) {
     for bound in bounds.iter_mut() {
         match bound {
             TypeParamBound::Trait(bound) => unconst_trait_bound(bound),
+            TypeParamBound::Verbatim(tt) => {
+                *tt = core::mem::take(tt).into_iter().skip(2).collect();
+            },
             _ => continue
         }
     }
@@ -116,17 +125,19 @@ fn unconst_trait_bound(bound: &mut TraitBound) {
     let mut segments = Punctuated::new();
     let mut pairs = core::mem::take(&mut bound.path.segments).into_pairs();
     if let Some(pair) = pairs.next() {
-        let (segment, panct) = pair.into_tuple();
+        let (segment, punct) = pair.into_tuple();
         if segment.ident.to_string() != "const" {
             segments.push_value(segment);
-            segments.push_punct(panct.unwrap());
+            if let Some(punct) = punct {
+                segments.push_punct(punct);
+            }
         }
     } 
     while let Some(pair) = pairs.next() {
-        let (segment, panct) = pair.into_tuple();
+        let (segment, punct) = pair.into_tuple();
         segments.push_value(segment);
-        if let Some(punct) = panct {
-            segments.push_punct(panct);
+        if let Some(punct) = punct {
+            segments.push_punct(punct);
         }
     }
     bound.path.segments = segments;
