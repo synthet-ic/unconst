@@ -13,7 +13,7 @@ use quote::quote;
 use syn::{
     parse, Item, ImplItem, TraitItem, Attribute, Generics, GenericParam,
     TypeParamBound, TraitBound, Signature, WherePredicate,
-    punctuated::Punctuated,
+    punctuated::{Punctuated, Pair},
     token::Add
 };
 
@@ -61,7 +61,7 @@ pub fn unconst(_attr: TokenStream, item: TokenStream) -> TokenStream {
             unconst_generics(&mut r#trait.generics);
             for supertrait in r#trait.supertraits.iter_mut() {
                 match supertrait {
-                    TypeParamBound::Trait(bound) => unconst_trait_bounds(bound),
+                    TypeParamBound::Trait(bound) => unconst_trait_bound(bound),
                     _ => continue
                 }
             }
@@ -96,9 +96,7 @@ fn unconst_generics(generics: &mut Generics) {
     if let Some(r#where) = generics.where_clause.as_mut() {
         for predicate in r#where.predicates.iter_mut() {
             match predicate {
-                WherePredicate::Type(predicate) => {
-                    unconst_bounds(&mut predicate.bounds);
-                },
+                WherePredicate::Type(pred) => unconst_bounds(&mut pred.bounds),
                 _ => continue
             }
         }
@@ -108,17 +106,28 @@ fn unconst_generics(generics: &mut Generics) {
 fn unconst_bounds(bounds: &mut Punctuated<TypeParamBound, Add>) {
     for bound in bounds.iter_mut() {
         match bound {
-            TypeParamBound::Trait(bound) => {
-                unconst_trait_bounds(bound);
-            },
+            TypeParamBound::Trait(bound) => unconst_trait_bound(bound),
             _ => continue
         }
     }
 }
 
-fn unconst_trait_bounds(trait_bound: &mut TraitBound) {
-    let mut segment = trait_bound.path.segments.first_mut().unwrap();
-    if let Some(ident) = segment.ident.to_string().strip_prefix("~const ") {
-        segment.ident = Ident::new(ident, segment.ident.span());
+fn unconst_trait_bound(bound: &mut TraitBound) {
+    let mut segments = Punctuated::new();
+    let mut pairs = core::mem::take(&mut bound.path.segments).into_pairs();
+    if let Some(pair) = pairs.next() {
+        let (segment, panct) = pair.into_tuple();
+        if segment.ident.to_string() != "const" {
+            segments.push_value(segment);
+            segments.push_punct(panct.unwrap());
+        }
+    } 
+    while let Some(pair) = pairs.next() {
+        let (segment, panct) = pair.into_tuple();
+        segments.push_value(segment);
+        if let Some(punct) = panct {
+            segments.push_punct(panct);
+        }
     }
+    bound.path.segments = segments;
 }
