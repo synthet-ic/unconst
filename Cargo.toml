@@ -1,8 +1,8 @@
 [package]
 name = "unconst"
-version = "0.0.2"
+version = "0.1.0"
 edition = "2021"
-description = "Macro to unconst functions/traits/impls"
+description = "Macro to unconst fns/traits/impls"
 license = "MIT/Apache-2.0"
 homepage = "https://github.com/synthet-ic/unconst"
 documentation = "https://docs.rs/unconst"
