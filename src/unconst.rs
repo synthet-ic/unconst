@@ -1,5 +1,7 @@
 extern crate alloc;
 
+mod impl_const;
+
 use alloc::{
     boxed::Box,
     string::ToString,
@@ -21,11 +23,11 @@ pub fn unconst(_attr: TokenStream, item: TokenStream) -> TokenStream {
     match parse::<Item>(item).unwrap() {
         Item::Const(mut r#const) => {
             lazylock(&mut r#const);
-            return quote!(#r#const).into();
+            return quote!(#r#const).into()
         }
         Item::Fn(mut r#fn) => {
             unconst_sig(&mut r#fn.sig);
-            return quote!(#r#fn).into();
+            return quote!(#r#fn).into()
         }
         Item::Enum(mut r#enum) => {
             unconst_attrs(&mut r#enum.attrs);
@@ -59,7 +61,10 @@ pub fn unconst(_attr: TokenStream, item: TokenStream) -> TokenStream {
             unconst_bounds(&mut r#trait.supertraits);
             return quote!(#r#trait).into()
         }
-        Item::Verbatim(_tt) => unimplemented!(),
+        Item::Verbatim(mut ts) => {
+            unconst_impl_const(&mut ts);
+            return ts.into()
+        },
         _ => panic!("Input must be one of const/fn/enum/struct/trait/impl")
     }
 }
@@ -153,4 +158,21 @@ fn unconst_trait_bound(bound: &mut TraitBound) {
         }
     }
     bound.path.segments = segments;
+}
+
+fn unconst_impl_const(ts: &mut proc_macro2::TokenStream) {
+    match parse2::<impl_const::ItemImplConst>(ts.clone()) {
+        Ok(mut impl_const) => {
+            impl_const.constness = None;
+            for item in r#impl_const.items.iter_mut() {
+                match item {
+                    ImplItem::Fn(r#fn) => unconst_sig(&mut r#fn.sig),
+                    _ => continue
+                };
+            }
+            unconst_generics(&mut r#impl_const.generics);
+            *ts = quote!(#impl_const);
+        },
+        Err(_) => {}
+    }
 }
