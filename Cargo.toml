@@ -15,7 +15,7 @@ proc-macro = true
 [dependencies]
 proc-macro2 = { version = "1", optional = true }
 quote = { version = "1", optional = true }
-syn = { version = "1", features = ["full", "parsing", "extra-traits"], optional = true }
+syn = { git = "https://github.com/dtolnay/syn", features = ["full", "parsing", "extra-traits"], optional = true }
 
 [features]
 default = ["proc-macro2", "quote", "syn"]
