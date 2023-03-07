@@ -1,3 +1,3 @@
 # unconst
 
-Macro to unconst functions/traits/impls
+Macro to unconst consts/fns/enums/structs/traits/impls.

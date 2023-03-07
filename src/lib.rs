@@ -1,4 +1,4 @@
-// #![no_std]
+#![no_std]
 
 extern crate alloc;
 
@@ -58,6 +58,7 @@ pub fn unconst(_attr: TokenStream, item: TokenStream) -> TokenStream {
             return quote!(#r#struct).into()
         }
         Item::Trait(mut r#trait) => {
+            unconst_attrs(&mut r#trait.attrs);
             for item in r#trait.items.iter_mut() {
                 match item {
                     TraitItem::Fn(r#fn) => unconst_sig(&mut r#fn.sig),
@@ -65,16 +66,11 @@ pub fn unconst(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 };
             }
             unconst_generics(&mut r#trait.generics);
-            for supertrait in r#trait.supertraits.iter_mut() {
-                match supertrait {
-                    TypeParamBound::Trait(bound) => unconst_trait_bound(bound),
-                    _ => continue
-                }
-            }
+            unconst_bounds(&mut r#trait.supertraits);
             return quote!(#r#trait).into()
         }
         Item::Verbatim(_tt) => unimplemented!(),
-        _ => panic!("Input must be one of function/enum/struct/trait/impl")
+        _ => panic!("Input must be one of const/fn/enum/struct/trait/impl")
     }
 }
 
@@ -90,16 +86,26 @@ fn lazylock(r#const: &mut ItemConst) {
 }
 
 fn unconst_attrs(attrs: &mut Vec<Attribute>) {
-    for attr in attrs.iter_mut() {
+    let mut srtta = Vec::new();
+    while let Some(mut attr) = attrs.pop() {
         match &mut attr.meta {
             Meta::Path(path) => {
-                let mut segment = path.segments.first_mut().unwrap();
+                if path.get_ident().unwrap().to_string() != "const_trait" {
+                    srtta.push(attr);
+                }
+            }
+            Meta::List(list) => {
+                let mut segment = list.path.segments.first_mut().unwrap();
                 if segment.ident.to_string() == "derive_const" {
                     segment.ident = Ident::new("derive", segment.ident.span());
                 }
+                srtta.push(attr);
             }
-            _ => continue
+            _ => { srtta.push(attr); }
         }
+    }
+    while let Some(attr) = srtta.pop() {
+        attrs.push(attr);
     }
 }
 
