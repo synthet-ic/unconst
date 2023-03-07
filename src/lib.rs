@@ -3,6 +3,7 @@
 extern crate alloc;
 
 use alloc::{
+    boxed::Box,
     string::ToString,
     vec::Vec
 };
@@ -11,8 +12,9 @@ use proc_macro::TokenStream;
 use proc_macro2::Ident;
 use quote::quote;
 use syn::{
-    parse, Item, ImplItem, TraitItem, Attribute, Generics, GenericParam,
-    TypeParamBound, TraitBound, Signature, WherePredicate, Meta,
+    parse, parse2, Item, ImplItem, TraitItem, Attribute, Generics, GenericParam,
+    TypeParamBound, TraitBound, Signature, WherePredicate, Meta, Type, Expr,
+    ItemConst,
     punctuated::Punctuated,
     token::Plus
 };
@@ -27,6 +29,10 @@ pub fn unconst(_attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn unconst(_attr: TokenStream, item: TokenStream) -> TokenStream {
     match parse::<Item>(item).unwrap() {
+        Item::Const(mut r#const) => {
+            lazylock(&mut r#const);
+            return quote!(#r#const).into();
+        }
         Item::Fn(mut r#fn) => {
             unconst_sig(&mut r#fn.sig);
             return quote!(#r#fn).into();
@@ -64,8 +70,19 @@ pub fn unconst(_attr: TokenStream, item: TokenStream) -> TokenStream {
             return quote!(#r#trait).into()
         }
         Item::Verbatim(_tt) => unimplemented!(),
-        _ => panic!("Input must be one of function/enum/struct/trait/impl")
+        _ => panic!("Input must be one of const/fn/enum/struct/trait/impl")
     }
+}
+
+fn lazylock(r#const: &mut ItemConst) {
+    let ty = &r#const.ty;
+    let ty = quote!(std::sync::LazyLock<#ty>);
+    let ty = parse2::<Type>(ty).unwrap();
+    r#const.ty = Box::new(ty);
+    let expr = &r#const.expr;
+    let expr = quote!(std::sync::LazyLock::new(|| #expr));
+    let expr = parse2::<Expr>(expr).unwrap();
+    r#const.expr = Box::new(expr);
 }
 
 fn unconst_attrs(attrs: &mut Vec<Attribute>) {
